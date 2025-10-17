@@ -13,23 +13,26 @@ Game::Game()
 		winnerText(this->font, "NONE", 100),
 		gameOver(false)
 {
-	// this->initVariables();
 	this->initWindow();
 	this->pitch = Pitch(this->videoMode.size);
-	this->initPlayers(this->videoMode.size.x, this->videoMode.size.y);
+	
+	if (!this->font.openFromFile("Font/Cardot-lxq6q.ttf"))
+	std::cout << "error loading font\n";
+	
+	if (!this->ballTexture.loadFromFile("Font/football.png"))
+	std::cout << "error loading ball texture\n";
 
-	if (!this->font.openFromFile("/Users/mpellegr/test_game/Font/Cardot-lxq6q.ttf"))
-		std::cout << "error loading font";
+	this->initPlayers(this->videoMode.size.x, this->videoMode.size.y);
 }
 
 Game::~Game() {
 }
 
 void Game::initWindow() {
-	this->videoMode = sf::VideoMode::getDesktopMode();
+	this->videoMode = sf::VideoMode({1280, 720});
 
-	this->videoMode.size.x = static_cast<int>(this->videoMode.size.x * .9 / 10) * 10;
-	this->videoMode.size.y = static_cast<int>(this->videoMode.size.y * .9 / 10) * 10;
+	// this->videoMode.size.x = static_cast<int>(this->videoMode.size.x * .9 / 10) * 10;
+	// this->videoMode.size.y = static_cast<int>(this->videoMode.size.y * .9 / 10) * 10;
 
 	this->window.create(this->videoMode, "CMake SFML Project");
 	this->window.setFramerateLimit(60);
@@ -41,7 +44,7 @@ const bool Game::getWindowIsOpen() const {
 }
 
 sf::Vector2f Game::getMousePos() {
-	return this->window.mapPixelToCoords(sf::Mouse::getPosition(this->window)); // window is a sf::Window
+	return this->window.mapPixelToCoords(sf::Mouse::getPosition(this->window));
 }
 
 std::vector<sf::Vector2f> Game::getStartingPositions(unsigned int w, unsigned int h)
@@ -76,7 +79,7 @@ void Game::initPlayers(unsigned int w, unsigned int h)
 {
 	std::vector<sf::Vector2f> positions = this->getStartingPositions(w, h);
 	for (size_t i = 0; i < positions.size(); i++)
-		this->players.emplace_back(positions[i].x, positions[i].y, i);
+		this->players.emplace_back(positions[i].x, positions[i].y, i, &this->ballTexture);
 }
 
 Player* Game::selectPlayer(sf::Vector2f mouseLocalPosition, bool firstTeamPlaying) {
@@ -218,6 +221,7 @@ void Game::drawTexts()
 
 void Game::gameRender() {
 	this->window.clear();
+
 	// draw pitch
 	this->pitch.drawPitch(this->window);
 

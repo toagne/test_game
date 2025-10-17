@@ -26,6 +26,7 @@ private:
 	sf::Font font;
 	sf::Text scoreText;
 	sf::Text winnerText;
+	sf::Texture ballTexture;
 
 	// void initVariables();
 	void initWindow();

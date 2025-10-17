@@ -171,8 +171,6 @@ void Pitch::handleIfSomeoneIsInGoal(std::vector<Player> *players, int *blueScore
 				if (a.getBallInGoal()) {
 					(*blueScore)++;
 					a.setBallInGoal(false);
-					// reset all pos
-					// game->reInitPlayersPos();
 					if (*blueScore == 3)
 						*gameOver = true;
 					break;
@@ -189,8 +187,6 @@ void Pitch::handleIfSomeoneIsInGoal(std::vector<Player> *players, int *blueScore
 				if (a.getBallInGoal()) {
 					(*redScore)++;
 					a.setBallInGoal(false);
-					// reset all pos
-					// game->reInitPlayersPos();
 					if (*redScore == 3)
 						*gameOver = true;
 					break;

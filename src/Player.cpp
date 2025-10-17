@@ -5,7 +5,7 @@ Player::Player()
 {
 }
 
-Player::Player(float x, float y, int i)
+Player::Player(float x, float y, int i, sf::Texture *ballTexture)
 {
 	float r = 20.f;
 	this->player.setOutlineColor(sf::Color::White);
@@ -36,7 +36,11 @@ Player::Player(float x, float y, int i)
 	this->step = {0.f, 0.f};
 	this->speed = 0.f;
 
-	this->friction = 0.95f;
+	this->friction = 0.98f;
+	if (i == 8) {
+		this->player.setTexture(ballTexture, true);
+		// this->player.setTextureRect(sf::IntRect(sf::Vector2i(0, 0), sf::Vector2i(128, 128)));
+	}
 }
 
 Player::~Player()
@@ -90,7 +94,7 @@ void Player::aim(sf::Vector2f mouseLocalPosition, float speed)
 		this->isAiming = true;
 	this->step = delta / len;
 	if (speed == 0)
-		this->speed = len / 10;
+		this->speed = len / 15.f;
 	else
 		this->speed = speed;
 	if (this->speed > 50)
@@ -116,8 +120,7 @@ void Player::playerMoves()
 	else {
 		this->speed = 0;
 		this->isMoving = false;
-		this->friction = 0.95f;
-		// this->setNewPos(this->player.getGlobalBounds().position.x, this->player.getGlobalBounds().position.y);
+		this->friction = 0.98f;
 	}
 }
 
@@ -154,73 +157,83 @@ bool Player::checkCollisionWith(Player *b)
 	return false;
 }
 
-void Player::handleCollisionWith(Player *b)
-{
-	Player *a = this;
-	sf::Vector2f pa = a->getPlayerCenterPos();
-	sf::Vector2f pb = b->getPlayerCenterPos();
-	sf::Vector2f normal = this->delta / this->len; // from b -> a
+	void Player::handleCollisionWith(Player *b)
+	{
+		Player *a = this;
+		sf::Vector2f pa = a->getPlayerCenterPos();
+		sf::Vector2f pb = b->getPlayerCenterPos();
 
-	// compute full velocities
-	sf::Vector2f va = a->getStep() * a->getSpeed();
-	sf::Vector2f vb = b->getStep() * b->getSpeed();
+		// normal from b -> a (this->delta and this->len were set by checkCollisionWith)
+		sf::Vector2f normal = this->delta / this->len;
 
-	// relative velocity along normal
-	float relVelAlongNormal = (va.x - vb.x) * normal.x + (va.y - vb.y) * normal.y;
+		// masses (use inverse mass so immovable objects can be mass = INF or inv = 0)
+		float mA = a->getR() * a->getR();
+		float mB = b->getR() * b->getR();
+		float invA = (mA > 0.f) ? (1.f / mA) : 0.f;
+		float invB = (mB > 0.f) ? (1.f / mB) : 0.f;
 
-	// if moving apart (or exactly tangent), skip impulse (but still separate if overlapped)
-	if (relVelAlongNormal >= 0.f) {
-		// still fix penetration so they are not stuck
+		// If both are immovable, nothing to do
+		if (invA + invB <= 0.f)
+			return;
+
+		// current full velocities
+		sf::Vector2f va = a->getStep() * a->getSpeed();
+		sf::Vector2f vb = b->getStep() * b->getSpeed();
+
+		// relative velocity along normal
+		float relVelAlongNormal = (va.x - vb.x) * normal.x + (va.y - vb.y) * normal.y;
+
+		// penetration depth
 		float overlap = a->getR() + b->getR() - this->len;
-		pa += normal * (overlap * 0.5f);
-		pb -= normal * (overlap * 0.5f);
+		if (overlap > 0.f) {
+			// correct positions weighted by inverse mass (lighter object moves more)
+			float totalInv = invA + invB;
+			float aMove = (totalInv > 0.f) ? (invA / totalInv) : 0.f;
+			float bMove = (totalInv > 0.f) ? (invB / totalInv) : 0.f;
 
-		// write back corrected centers (adjust if setNewPos expects top-left)
-		a->setNewPos(pa.x - a->getR(), pa.y - a->getR());
-		b->setNewPos(pb.x - b->getR(), pb.y - b->getR());
+			// move them apart
+			pa += normal * (overlap * aMove);
+			pb -= normal * (overlap * bMove);
 
-		return ;
-	}
+			// write back corrected centers (adjust if setNewPos expects top-left)
+			a->setNewPos(pa.x - a->getR(), pa.y - a->getR());
+			b->setNewPos(pb.x - b->getR(), pb.y - b->getR());
+		}
 
-	// --- resolve penetration (move each by half overlap) ---
-	float overlap = a->getR() + b->getR() - this->len;
-	pa += normal * (overlap * 0.5f);
-	pb -= normal * (overlap * 0.5f);
-	a->setNewPos(pa.x - a->getR(), pa.y - a->getR());
-	b->setNewPos(pb.x - b->getR(), pb.y - b->getR());
+		// if moving apart or tangent, we've already corrected penetration, so skip impulse
+		if (relVelAlongNormal >= 0.f)
+			return;
 
-	// --- decompose velocities into normal/tangent ---
-	float va_n = va.x * normal.x + va.y * normal.y;
-	float vb_n = vb.x * normal.x + vb.y * normal.y;
-	sf::Vector2f va_t = va - normal * va_n;
-	sf::Vector2f vb_t = vb - normal * vb_n;
+		// coefficient of restitution (elasticity) -- pick something or get per-object
+		// e = 1.0 for perfectly elastic; smaller for bouncier or inelastic collisions.
+		float e = 1.0f;
+		// optionally: e = std::min(a->getRestitution(), b->getRestitution());
 
-	// --- for equal masses, swap normal components (elastic) ---
-	float va_n_after = vb_n;
-	float vb_n_after = va_n;
+		// impulse scalar
+		float totalInv = invA + invB; // we already checked > 0
+		float j = (-(1.f + e) * relVelAlongNormal) / totalInv;
 
-	sf::Vector2f va_after = va_t + normal * va_n_after;
-	sf::Vector2f vb_after = vb_t + normal * vb_n_after;
+		// apply impulse along normal
+		sf::Vector2f impulse = normal * j;
+		sf::Vector2f va_after = va + impulse * invA;
+		sf::Vector2f vb_after = vb - impulse * invB;
 
-	// --- convert to direction + speed and write back ---
-	float speedA = std::hypotf(va_after.x, va_after.y);
-	float speedB = std::hypotf(vb_after.x, vb_after.y);
+		// keep tangential components implicitly (we used full velocities)
+		// convert to dir + speed and write back
+		float speedA = std::hypotf(va_after.x, va_after.y);
+		float speedB = std::hypotf(vb_after.x, vb_after.y);
 
-	sf::Vector2f dirA = (speedA > 1e-6f) ? (va_after / speedA) : sf::Vector2f(0.f, 0.f);
-	sf::Vector2f dirB = (speedB > 1e-6f) ? (vb_after / speedB) : sf::Vector2f(0.f, 0.f);
+		sf::Vector2f dirA = (speedA > 1e-6f) ? (va_after / speedA) : sf::Vector2f(0.f, 0.f);
+		sf::Vector2f dirB = (speedB > 1e-6f) ? (vb_after / speedB) : sf::Vector2f(0.f, 0.f);
 
-	a->setNewStep(dirA);
-	a->setNewSpeed(speedA);
-	b->setNewStep(dirB);
-	if (b->getIndex() == 8)
-		b->setNewSpeed(speedB * 1.5);
-	else
+		a->setNewStep(dirA);
+		a->setNewSpeed(speedA);
+		b->setNewStep(dirB);
 		b->setNewSpeed(speedB);
 
-	// set moving flags if they gained speed (tweak threshold to taste)
-	if (speedA > 0.01f) a->setIsMoving(true);
-	if (speedB > 0.01f) b->setIsMoving(true);
-}
+		if (speedA > 0.01f) a->setIsMoving(true);
+		if (speedB > 0.01f) b->setIsMoving(true);
+	}
 
 sf::Vector2f Player::rotateVector(sf::Vector2f v, float angle)
 {

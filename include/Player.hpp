@@ -24,7 +24,7 @@ private:
 public:
 	int index;
 	Player();
-	Player(float x, float y, int i);
+	Player(float x, float y, int i, sf::Texture *ballTexture);
 	~Player();
 
 	void drawPlayer(sf::RenderTarget &target, bool firstTeamPlaying, bool playIsOn, bool someoneSelected, Player *selected);
